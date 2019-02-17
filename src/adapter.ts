@@ -1,3 +1,4 @@
+import { ProjectWorkspace } from "jest-editor-support";
 import * as vscode from "vscode";
 import {
   TestAdapter,
@@ -13,10 +14,10 @@ import {
   mapJestAssertionToTestDecorations,
   mapJestAssertionToTestInfo,
   mapJestFileResultToTestSuiteInfo,
-  mapJestResponseToTestSuiteInfo,
   mapTestIdsToTestFilter,
 } from "./helpers/mapJestToTestAdapter";
 import JestManager, { IJestManagerOptions } from "./JestManager";
+import TestLoader from "./TestLoader";
 
 interface IDiposable {
   dispose(): void;
@@ -67,23 +68,30 @@ export default class JestTestAdapter implements TestAdapter {
 
     this.log.info("Loading Jest tests");
 
-    this.testsEmitter.fire({
-      type: "started",
-    } as TestLoadStartedEvent);
+    const testLoader = new TestLoader(
+      this.testsEmitter,
+      this.log,
+      this.initProjectWorkspace(),
+    );
+    await testLoader.loadTests();
 
-    const loadedTests = await this.jestManager.loadTests();
-    if (loadedTests) {
-      const suite = mapJestResponseToTestSuiteInfo(loadedTests, this.workspace.uri.fsPath);
-      this.testsEmitter.fire({
-        suite,
-        type: "finished",
-      } as TestLoadFinishedEvent);
-    } else {
-      // Test load was canceled
-      this.testsEmitter.fire({
-        type: "finished",
-      } as TestLoadFinishedEvent);
-    }
+    // this.testsEmitter.fire({
+    //   type: "started",
+    // } as TestLoadStartedEvent);
+
+    // const loadedTests = await this.jestManager.loadTests();
+    // if (loadedTests) {
+    //   const suite = mapJestResponseToTestSuiteInfo(loadedTests, this.workspace.uri.fsPath);
+    //   this.testsEmitter.fire({
+    //     suite,
+    //     type: "finished",
+    //   } as TestLoadFinishedEvent);
+    // } else {
+    //   // Test load was canceled
+    //   this.testsEmitter.fire({
+    //     type: "finished",
+    //   } as TestLoadFinishedEvent);
+    // }
   }
 
   public async run(tests: string[]): Promise<void> {
@@ -175,5 +183,19 @@ export default class JestTestAdapter implements TestAdapter {
       disposable.dispose();
     }
     this.disposables = [];
+  }
+
+  private initProjectWorkspace(): ProjectWorkspace {
+    const configPath = this.options.pathToConfig(this.workspace);
+    const jestPath = this.options.pathToJest(this.workspace);
+    return new ProjectWorkspace(
+      this.workspace.uri.fsPath,
+      jestPath,
+      configPath,
+      // TOOD: lookup version used in project
+      20,
+      false,
+      false,
+    );
   }
 }
