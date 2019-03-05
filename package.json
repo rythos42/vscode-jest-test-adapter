@@ -33,16 +33,20 @@
     "rebuild": "npm run clean && npm run build",
     "package": "mkdir build && vsce package -o build/vscode-jest-test-adapter.vsix",
     "publish": "vsce publish",
-    "vscode:prepublish": "tsc"
+    "vscode:prepublish": "tsc",
+    "lint": "tslint --project .",
+    "format": "prettier --write src/**/*.ts"
   },
   "dependencies": {
     "jest-editor-support": "^23.6.0",
     "tslib": "^1.9.3",
     "vscode-test-adapter-api": "^1.1.0",
-    "vscode-test-adapter-util": "^0.6.0"
+    "vscode-test-adapter-util": "^0.6.0",
+    "prettier": "^1.16.4"
   },
   "devDependencies": {
     "tslint": "^5.12.0",
+    "tslint-config-prettier": "^1.18.0",
     "typescript": "^3.2.2",
     "vsce": "^1.54.0",
     "vscode": "^1.1.26"

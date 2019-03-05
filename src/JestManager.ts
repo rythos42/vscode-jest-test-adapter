@@ -3,7 +3,7 @@ import {
   Options,
   ProjectWorkspace,
   Runner,
-  TestReconciler,
+  TestReconciler
 } from "jest-editor-support";
 import { platform } from "os";
 import { WorkspaceFolder } from "vscode";
@@ -12,7 +12,7 @@ import { IJestResponse, ITestFilter } from "./types";
 export enum DebugOutput {
   externalTerminal = "externalTerminal",
   integratedTerminal = "integratedTerminal",
-  internalConsole = "internalConsole",
+  internalConsole = "internalConsole"
 }
 
 export interface IJestManagerOptions {
@@ -26,11 +26,11 @@ export default class JestManager {
 
   constructor(
     public readonly workspace: WorkspaceFolder,
-    private readonly options: IJestManagerOptions,
-  ) { }
+    private readonly options: IJestManagerOptions
+  ) {}
 
   public closeAllActiveProcesses(): void {
-    [...this.activeRunners].forEach((r) => {
+    [...this.activeRunners].forEach(r => {
       r.closeProcess();
     });
     this.activeRunners.clear();
@@ -41,18 +41,18 @@ export default class JestManager {
   }
 
   public async runTests(
-    testFilter?: ITestFilter | null,
+    testFilter?: ITestFilter | null
   ): Promise<IJestResponse | null> {
     const results = await new Promise<JestTotalResults | null>(
       (resolve, reject) => {
         const runner = this.createRunner(testFilter);
         runner
           .once("executableJSON", (data: JestTotalResults) => resolve(data))
-          .once("exception", (result) => reject(result))
-          .once("terminalError", (result) => reject(result))
+          .once("exception", result => reject(result))
+          .once("terminalError", result => reject(result))
           .once("debuggerProcessExit", () => resolve(null));
         runner.start(false);
-      },
+      }
     );
     if (!results) {
       return null;
@@ -63,7 +63,7 @@ export default class JestManager {
 
     return {
       reconciler,
-      results,
+      results
     };
   }
 
@@ -79,7 +79,7 @@ export default class JestManager {
       testNamePattern:
         testFilter && testFilter.testNamePattern
           ? `"${testFilter.testNamePattern.replace(/"/g, '\\"')}"`
-          : undefined,
+          : undefined
     };
 
     const projectWorkspace = this.initProjectWorkspace();
@@ -105,7 +105,7 @@ export default class JestManager {
       // TOOD: lookup version used in project
       20,
       false,
-      false,
+      false
     );
   }
 }

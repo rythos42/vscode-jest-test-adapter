@@ -26,7 +26,7 @@ function getJestAdapterOptions(): IJestTestAdapterOptions {
       .getConfiguration("jestTestExplorer")
       .get<DebugOutput>("debugOutput", DebugOutput.internalConsole),
     pathToConfig,
-    pathToJest,
+    pathToJest
   };
 }
 
@@ -38,13 +38,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const log = new Log(
     "jestTestExplorer",
     workspaceFolder,
-    "Jest Test Explorer Log",
+    "Jest Test Explorer Log"
   );
   context.subscriptions.push(log);
 
   // get the Test Explorer extension
   const testExplorerExtension = vscode.extensions.getExtension<TestHub>(
-    testExplorerExtensionId,
+    testExplorerExtensionId
   );
   if (log.enabled) {
     log.info(`Test Explorer ${testExplorerExtension ? "" : "not "}found`);
@@ -59,9 +59,9 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       new TestAdapterRegistrar(
         testHub,
-        (wf) => new JestTestAdapter(wf, log, jestAdapterOptions),
-        log,
-      ),
+        wf => new JestTestAdapter(wf, log, jestAdapterOptions),
+        log
+      )
     );
   }
 }

@@ -6,7 +6,7 @@ import {
   TestLoadStartedEvent,
   TestRunFinishedEvent,
   TestRunStartedEvent,
-  TestSuiteEvent,
+  TestSuiteEvent
 } from "vscode-test-adapter-api";
 import { Log } from "vscode-test-adapter-util";
 import {
@@ -14,7 +14,7 @@ import {
   mapJestAssertionToTestInfo,
   mapJestFileResultToTestSuiteInfo,
   mapJestResponseToTestSuiteInfo,
-  mapTestIdsToTestFilter,
+  mapTestIdsToTestFilter
 } from "./helpers/mapJestToTestAdapter";
 import JestManager, { IJestManagerOptions } from "./JestManager";
 import { IJestResponse } from "./types";
@@ -57,7 +57,7 @@ export default class JestTestAdapter implements TestAdapter {
   constructor(
     public readonly workspace: vscode.WorkspaceFolder,
     private readonly log: Log,
-    private readonly options: IJestTestAdapterOptions,
+    private readonly options: IJestTestAdapterOptions
   ) {
     this.log.info("Initializing Jest adapter");
 
@@ -72,23 +72,23 @@ export default class JestTestAdapter implements TestAdapter {
     this.log.info("Loading Jest tests");
 
     this.testsEmitter.fire({
-      type: "started",
+      type: "started"
     } as TestLoadStartedEvent);
 
     const loadedTests = await this.jestManager.loadTests();
     if (loadedTests) {
       const suite = mapJestResponseToTestSuiteInfo(
         loadedTests,
-        this.workspace.uri.fsPath,
+        this.workspace.uri.fsPath
       );
       this.testsEmitter.fire({
         suite,
-        type: "finished",
+        type: "finished"
       } as TestLoadFinishedEvent);
     } else {
       // Test load was canceled
       this.testsEmitter.fire({
-        type: "finished",
+        type: "finished"
       } as TestLoadFinishedEvent);
     }
 
@@ -101,7 +101,7 @@ export default class JestTestAdapter implements TestAdapter {
 
     this.testStatesEmitter.fire({
       tests,
-      type: "started",
+      type: "started"
     } as TestRunStartedEvent);
 
     const testFilter = mapTestIdsToTestFilter(tests);
@@ -132,7 +132,7 @@ export default class JestTestAdapter implements TestAdapter {
       name: "vscode-jest-test-adapter",
       program: "${workspaceFolder}/node_modules/jest/bin/jest",
       request: "launch",
-      type: "node",
+      type: "node"
     };
 
     await vscode.debug.startDebugging(this.workspace, debugConfiguration);
@@ -154,26 +154,26 @@ export default class JestTestAdapter implements TestAdapter {
   private handleRunResponse(runResponse: IJestResponse | null) {
     if (runResponse) {
       const { reconciler, results } = runResponse;
-      results.testResults.forEach((fileResult) => {
+      results.testResults.forEach(fileResult => {
         this.testStatesEmitter.fire({
           state: "running",
           suite: mapJestFileResultToTestSuiteInfo(
             fileResult,
-            this.workspace.uri.fsPath,
+            this.workspace.uri.fsPath
           ),
-          type: "suite",
+          type: "suite"
         } as TestSuiteEvent);
 
-        fileResult.assertionResults.forEach((assertionResult) => {
+        fileResult.assertionResults.forEach(assertionResult => {
           this.testStatesEmitter.fire({
             decorations: mapJestAssertionToTestDecorations(
               assertionResult,
               fileResult.name,
-              reconciler,
+              reconciler
             ),
             state: assertionResult.status,
             test: mapJestAssertionToTestInfo(assertionResult, fileResult),
-            type: "test",
+            type: "test"
           } as TestEvent);
         });
 
@@ -181,19 +181,19 @@ export default class JestTestAdapter implements TestAdapter {
           state: "completed",
           suite: mapJestFileResultToTestSuiteInfo(
             fileResult,
-            this.workspace.uri.fsPath,
+            this.workspace.uri.fsPath
           ),
-          type: "suite",
+          type: "suite"
         } as TestSuiteEvent);
       });
 
       this.testStatesEmitter.fire({
-        type: "finished",
+        type: "finished"
       } as TestRunFinishedEvent);
     } else {
       // Test run was canceled
       this.testStatesEmitter.fire({
-        type: "finished",
+        type: "finished"
       } as TestRunFinishedEvent);
     }
   }

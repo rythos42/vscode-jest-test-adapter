@@ -2,12 +2,12 @@ import {
   JestAssertionResults,
   JestFileResults,
   TestAssertionStatus,
-  TestReconciler,
+  TestReconciler
 } from "jest-editor-support";
 import {
   TestDecoration,
   TestInfo,
-  TestSuiteInfo,
+  TestSuiteInfo
 } from "vscode-test-adapter-api";
 import { TEST_ID_SEPARATOR } from "../constants";
 import { IJestResponse, ITestFilter } from "../types";
@@ -16,22 +16,22 @@ import escapeRegExp from "./escapeRegExp";
 function getAssertionStatus(
   result: JestAssertionResults,
   file: string,
-  reconciler?: TestReconciler,
+  reconciler?: TestReconciler
 ): TestAssertionStatus | undefined {
   if (reconciler) {
     const fileResult = reconciler.assertionsForTestFile(file) || [];
-    return fileResult.find((x) => x.title === result.fullName);
+    return fileResult.find(x => x.title === result.fullName);
   }
   return undefined;
 }
 
 function merge(
   mergeDestination: Array<TestSuiteInfo | TestInfo>,
-  mergeSource: Array<TestSuiteInfo | TestInfo>,
+  mergeSource: Array<TestSuiteInfo | TestInfo>
 ): Array<TestSuiteInfo | TestInfo> {
-  mergeSource.forEach((suiteResult) => {
+  mergeSource.forEach(suiteResult => {
     const existingResult = mergeDestination.find(
-      (result) => result.id === suiteResult.id,
+      result => result.id === suiteResult.id
     );
     if (
       existingResult &&
@@ -40,7 +40,7 @@ function merge(
     ) {
       merge(
         (existingResult as TestSuiteInfo).children,
-        (suiteResult as TestSuiteInfo).children,
+        (suiteResult as TestSuiteInfo).children
       );
     } else {
       mergeDestination.push(suiteResult);
@@ -52,37 +52,39 @@ function merge(
 
 export function mapJestResponseToTestSuiteInfo(
   { results }: IJestResponse,
-  workDir: string,
+  workDir: string
 ): TestSuiteInfo {
-  const suiteResults = results.testResults.map((t) =>
-    mapJestFileResultToTestSuiteInfo(t, workDir),
+  const suiteResults = results.testResults.map(t =>
+    mapJestFileResultToTestSuiteInfo(t, workDir)
   );
 
   return {
     children: merge([], suiteResults),
     id: "root",
     label: "Jest",
-    type: "suite",
+    type: "suite"
   };
 }
 
 function createDirectoryStructure(
   currentLevel: TestSuiteInfo,
   thePath: string[],
-  currentPathIndex: number,
+  currentPathIndex: number
 ): TestSuiteInfo {
   let currentPathElement = thePath[currentPathIndex];
   if (currentPathElement === "") {
     currentPathIndex--;
     currentPathElement = thePath[currentPathIndex];
   }
-  if (currentPathElement === undefined) { return currentLevel; }
+  if (currentPathElement === undefined) {
+    return currentLevel;
+  }
 
   const nextLevel: TestSuiteInfo = {
     children: [currentLevel],
-    label: currentPathElement,
     id: currentPathElement,
-    type: "suite",
+    label: currentPathElement,
+    type: "suite"
   };
 
   return createDirectoryStructure(nextLevel, thePath, currentPathIndex - 1);
@@ -90,21 +92,21 @@ function createDirectoryStructure(
 
 export function mapJestFileResultToTestSuiteInfo(
   result: JestFileResults,
-  workDir: string,
+  workDir: string
 ): TestSuiteInfo {
   const testSuites = result.assertionResults
     .filter(
-      (testResult) =>
-        testResult.ancestorTitles && testResult.ancestorTitles.length > 0,
+      testResult =>
+        testResult.ancestorTitles && testResult.ancestorTitles.length > 0
     )
     .reduce((testTree, testResult) => {
       const target = (testResult.ancestorTitles as string[]).reduce(
         (innerTree, ancestorTitle, i, a) => {
           const fullName = a.slice(0, i + 1).join(" ");
           const id = `${escapeRegExp(
-            result.name,
+            result.name
           )}${TEST_ID_SEPARATOR}^${escapeRegExp(fullName)}`;
-          let next = innerTree.find((x) => x.id === id);
+          let next = innerTree.find(x => x.id === id);
           if (next) {
             return (next as TestSuiteInfo).children;
           } else {
@@ -113,13 +115,13 @@ export function mapJestFileResultToTestSuiteInfo(
               file: result.name,
               id,
               label: ancestorTitle,
-              type: "suite",
+              type: "suite"
             };
             innerTree.push(next);
             return next.children;
           }
         },
-        testTree,
+        testTree
       );
 
       target.push(mapJestAssertionToTestInfo(testResult, result));
@@ -131,10 +133,10 @@ export function mapJestFileResultToTestSuiteInfo(
     TestSuiteInfo | TestInfo
   > = result.assertionResults
     .filter(
-      (testResult) =>
-        !testResult.ancestorTitles || testResult.ancestorTitles.length === 0,
+      testResult =>
+        !testResult.ancestorTitles || testResult.ancestorTitles.length === 0
     )
-    .map((testResult) => mapJestAssertionToTestInfo(testResult, result));
+    .map(testResult => mapJestAssertionToTestInfo(testResult, result));
 
   const pathSeparator = result.name.indexOf("/") !== -1 ? "/" : "\\";
   const path = result.name
@@ -142,11 +144,11 @@ export function mapJestFileResultToTestSuiteInfo(
     .split(pathSeparator);
   const lastPathElement = path[path.length - 1];
   const lastChild: TestSuiteInfo = {
-    label: lastPathElement,
-    id: lastPathElement,
-    type: "suite",
-    file: result.name,
     children: testCases.concat(testSuites),
+    file: result.name,
+    id: lastPathElement,
+    label: lastPathElement,
+    type: "suite"
   };
   return createDirectoryStructure(lastChild, path, path.length - 2);
 }
@@ -154,15 +156,15 @@ export function mapJestFileResultToTestSuiteInfo(
 export function mapJestAssertionToTestDecorations(
   result: JestAssertionResults,
   file: string,
-  reconciler?: TestReconciler,
+  reconciler?: TestReconciler
 ): TestDecoration[] {
   const assertionResult = getAssertionStatus(result, file, reconciler);
   if (assertionResult) {
     return [
       {
         line: assertionResult.line || 0,
-        message: assertionResult.terseMessage || "",
-      },
+        message: assertionResult.terseMessage || ""
+      }
     ];
   }
   return [];
@@ -171,12 +173,12 @@ export function mapJestAssertionToTestDecorations(
 export function mapJestAssertionToTestInfo(
   assertionResult: JestAssertionResults,
   fileResult: JestFileResults,
-  reconciler?: TestReconciler,
+  reconciler?: TestReconciler
 ): TestInfo {
   const assertionStatus = getAssertionStatus(
     assertionResult,
     fileResult.name,
-    reconciler,
+    reconciler
   );
   let line: number | undefined;
   let skipped: boolean = false;
@@ -191,16 +193,16 @@ export function mapJestAssertionToTestInfo(
     label: assertionResult.title,
     line,
     skipped,
-    type: "test",
+    type: "test"
   };
 }
 
 export function getTestId(
   fileResult: JestFileResults,
-  assertionResult: JestAssertionResults,
+  assertionResult: JestAssertionResults
 ): string {
   return `${escapeRegExp(
-    fileResult.name,
+    fileResult.name
   )}${TEST_ID_SEPARATOR}${mapJestAssertionToId(assertionResult)}`;
 }
 
@@ -218,16 +220,16 @@ export function mapTestIdsToTestFilter(tests: string[]): ITestFilter | null {
     // Test filter is a name
     return {
       testFileNamePattern: `(${tests
-        .map((t) => t.split(TEST_ID_SEPARATOR)[0])
+        .map(t => t.split(TEST_ID_SEPARATOR)[0])
         .join("|")})`,
       testNamePattern: `(${tests
-        .map((t) => t.split(TEST_ID_SEPARATOR)[1])
-        .join("|")})`,
+        .map(t => t.split(TEST_ID_SEPARATOR)[1])
+        .join("|")})`
     };
   } else {
     // Test filter is a file path
     return {
-      testFileNamePattern: `(${tests.join("|")})`,
+      testFileNamePattern: `(${tests.join("|")})`
     };
   }
 }
