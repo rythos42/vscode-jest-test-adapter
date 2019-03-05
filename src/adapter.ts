@@ -18,6 +18,7 @@ import {
 } from "./helpers/mapJestToTestAdapter";
 import JestManager, { IJestManagerOptions } from "./JestManager";
 import TestLoader from "./TestLoader";
+import { IJestResponse } from "./types";
 
 interface IDiposable {
   dispose(): void;
@@ -25,17 +26,13 @@ interface IDiposable {
 
 export type IJestTestAdapterOptions = IJestManagerOptions;
 
-type TestStateCompatibleEvent = TestRunStartedEvent | TestRunFinishedEvent | TestSuiteEvent | TestEvent;
+type TestStateCompatibleEvent =
+  | TestRunStartedEvent
+  | TestRunFinishedEvent
+  | TestSuiteEvent
+  | TestEvent;
 
 export default class JestTestAdapter implements TestAdapter {
-
-  private disposables: IDiposable[] = [];
-
-  private readonly testsEmitter = new vscode.EventEmitter<TestLoadStartedEvent | TestLoadFinishedEvent>();
-  private readonly testStatesEmitter = new vscode.EventEmitter<TestStateCompatibleEvent>();
-  private readonly autorunEmitter = new vscode.EventEmitter<void>();
-  private readonly jestManager: JestManager;
-
   get autorun(): vscode.Event<void> | undefined {
     return this.autorunEmitter.event;
   }
@@ -47,13 +44,22 @@ export default class JestTestAdapter implements TestAdapter {
   get testStates(): vscode.Event<TestStateCompatibleEvent> {
     return this.testStatesEmitter.event;
   }
+  private disposables: IDiposable[] = [];
+
+  private readonly testsEmitter = new vscode.EventEmitter<
+    TestLoadStartedEvent | TestLoadFinishedEvent
+  >();
+  private readonly testStatesEmitter = new vscode.EventEmitter<
+    TestStateCompatibleEvent
+  >();
+  private readonly autorunEmitter = new vscode.EventEmitter<void>();
+  private readonly jestManager: JestManager;
 
   constructor(
     public readonly workspace: vscode.WorkspaceFolder,
     private readonly log: Log,
     private readonly options: IJestTestAdapterOptions,
   ) {
-
     this.log.info("Initializing Jest adapter");
 
     this.jestManager = new JestManager(workspace, options);
@@ -61,11 +67,9 @@ export default class JestTestAdapter implements TestAdapter {
     this.disposables.push(this.testsEmitter);
     this.disposables.push(this.testStatesEmitter);
     this.disposables.push(this.autorunEmitter);
-
   }
 
   public async load(): Promise<void> {
-
     this.log.info("Loading Jest tests");
 
     const testLoader = new TestLoader(
@@ -92,10 +96,11 @@ export default class JestTestAdapter implements TestAdapter {
     //     type: "finished",
     //   } as TestLoadFinishedEvent);
     // }
+    // because loadTests currently runs all the tests, might as well report the status
+    this.handleRunResponse(loadedTests);
   }
 
   public async run(tests: string[]): Promise<void> {
-
     this.log.info(`Running Jest tests ${JSON.stringify(tests)}`);
 
     this.testStatesEmitter.fire({
@@ -105,42 +110,7 @@ export default class JestTestAdapter implements TestAdapter {
 
     const testFilter = mapTestIdsToTestFilter(tests);
     const jestResponse = await this.jestManager.runTests(testFilter);
-
-    if (jestResponse) {
-      const { reconciler, results } = jestResponse;
-      results.testResults.forEach((fileResult) => {
-        this.testStatesEmitter.fire({
-          state: "running",
-          suite: mapJestFileResultToTestSuiteInfo(fileResult, this.workspace.uri.fsPath),
-          type: "suite",
-        } as TestSuiteEvent);
-
-        fileResult.assertionResults.forEach((assertionResult) => {
-          this.testStatesEmitter.fire({
-            decorations: mapJestAssertionToTestDecorations(assertionResult, fileResult.name, reconciler),
-            state: assertionResult.status,
-            test: mapJestAssertionToTestInfo(assertionResult, fileResult.name),
-            type: "test",
-          } as TestEvent);
-        });
-
-        this.testStatesEmitter.fire({
-          state: "completed",
-          suite: mapJestFileResultToTestSuiteInfo(fileResult, this.workspace.uri.fsPath),
-          type: "suite",
-        } as TestSuiteEvent);
-      });
-
-      this.testStatesEmitter.fire({
-        type: "finished",
-      } as TestRunFinishedEvent);
-    } else {
-      // Test run was canceled
-      this.testStatesEmitter.fire({
-        type: "finished",
-      } as TestRunFinishedEvent);
-    }
-
+    this.handleRunResponse(jestResponse);
   }
 
   public async debug(tests: string[]): Promise<void> {
@@ -197,5 +167,52 @@ export default class JestTestAdapter implements TestAdapter {
       false,
       false,
     );
+  }
+  
+  private handleRunResponse(runResponse: IJestResponse | null) {
+    if (runResponse) {
+      const { reconciler, results } = runResponse;
+      results.testResults.forEach((fileResult) => {
+        this.testStatesEmitter.fire({
+          state: "running",
+          suite: mapJestFileResultToTestSuiteInfo(
+            fileResult,
+            this.workspace.uri.fsPath,
+          ),
+          type: "suite",
+        } as TestSuiteEvent);
+
+        fileResult.assertionResults.forEach((assertionResult) => {
+          this.testStatesEmitter.fire({
+            decorations: mapJestAssertionToTestDecorations(
+              assertionResult,
+              fileResult.name,
+              reconciler,
+            ),
+            state: assertionResult.status,
+            test: mapJestAssertionToTestInfo(assertionResult, fileResult),
+            type: "test",
+          } as TestEvent);
+        });
+
+        this.testStatesEmitter.fire({
+          state: "completed",
+          suite: mapJestFileResultToTestSuiteInfo(
+            fileResult,
+            this.workspace.uri.fsPath,
+          ),
+          type: "suite",
+        } as TestSuiteEvent);
+      });
+
+      this.testStatesEmitter.fire({
+        type: "finished",
+      } as TestRunFinishedEvent);
+    } else {
+      // Test run was canceled
+      this.testStatesEmitter.fire({
+        type: "finished",
+      } as TestRunFinishedEvent);
+    }
   }
 }
