@@ -80,8 +80,8 @@ function createDirectoryStructure(
 
   const nextLevel: TestSuiteInfo = {
     children: [currentLevel],
-    label: currentPathElement,
     id: currentPathElement,
+    label: currentPathElement,
     type: "suite",
   };
 
@@ -142,11 +142,11 @@ export function mapJestFileResultToTestSuiteInfo(
     .split(pathSeparator);
   const lastPathElement = path[path.length - 1];
   const lastChild: TestSuiteInfo = {
-    label: lastPathElement,
-    id: lastPathElement,
-    type: "suite",
-    file: result.name,
     children: testCases.concat(testSuites),
+    file: result.name,
+    id: lastPathElement,
+    label: lastPathElement,
+    type: "suite",
   };
   return createDirectoryStructure(lastChild, path, path.length - 2);
 }
