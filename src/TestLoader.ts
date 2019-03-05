@@ -1,22 +1,12 @@
 import * as fs from "fs";
 import {
-  DescribeBlock,
-  ItBlock,
+  IParseResults,
   parse,
-  ParsedNode,
-  ParsedNodeTypes,
   ProjectWorkspace,
   Settings,
 } from "jest-editor-support";
 import * as mm from "micromatch";
 import * as path from "path";
-import { EventEmitter } from "vscode";
-import {
-  TestInfo,
-  TestLoadFinishedEvent,
-  TestLoadStartedEvent,
-  TestSuiteInfo,
-} from "vscode-test-adapter-api";
 import { Log } from "vscode-test-adapter-util";
 
 type Matcher = (value: string) => boolean;
@@ -63,19 +53,12 @@ function createMatcher(settings: Settings): Matcher {
  * @param directory The full file system path to the directory.
  * @param matcher The matcher function to use to determine if a file includes tests.
  */
-async function exploreDirectory(directory: string, matcher: Matcher): Promise<TestSuiteInfo> {
+async function exploreDirectory(directory: string, matcher: Matcher): Promise<IParseResults[]> {
   const contents = await getDirectoryContents(directory);
-  const children = await Promise.all(contents.map((x) => evalueFilePath(x, matcher)));
-  const filteredChildren = children
-    .filter(Boolean)
-    .filter((x) => (x as TestSuiteInfo).children.length > 0);
-  return {
-    children: filteredChildren,
-    file: directory,
-    id: directory,
-    label: path.basename(directory),
-    type: "suite",
-  } as TestSuiteInfo;
+  const files = await Promise.all(contents.map((x) => evaluateFilePath(x, matcher)));
+
+  // some alternatives methods are not accepted by TS
+  return Array.prototype.concat(...files);
 }
 
 /**
@@ -86,71 +69,14 @@ async function exploreDirectory(directory: string, matcher: Matcher): Promise<Te
  * @param filePath The file path to evaluate.
  * @param matcher The matcher function to use to determine if a file includes tests.
  */
-async function evalueFilePath(filePath: string, matcher: Matcher): Promise<TestSuiteInfo | null> {
+async function evaluateFilePath(filePath: string, matcher: Matcher): Promise<IParseResults[]> {
   const isDirectory = await checkIsDirectory(filePath);
   if (isDirectory) {
-    const testSuite = await exploreDirectory(filePath, matcher);
-    return testSuite.children.length > 0 ? testSuite : null;
+    return await exploreDirectory(filePath, matcher);
   } else if (matcher(filePath)) {
-    return exploreFile(filePath);
+    return [parse(filePath)];
   } else {
-    return null;
-  }
-}
-
-/**
- * Explores a file by parsing the contents and returning a TestSuiteInfo representing the tests contained within.
- * @param file The file path to explore.
- */
-function exploreFile(file: string): TestSuiteInfo {
-  const parsedInfo = parse(file);
-  const children = (parsedInfo.root.children || [])
-    .map((x) => exploreNode(x, file, file))
-    .filter(Boolean);
-  return {
-    children,
-    file,
-    id: file,
-    label: path.basename(file),
-    type: "suite",
-  } as TestSuiteInfo;
-}
-
-/**
- * Recursively explores a node.
- * Returns a TestInfo if the node is an individual test.
- * Returns a TestSuiteInfo if the node is a group of tests, such as a describe block.
- * @param node The node to explore.
- * @param file The path of the file being explored.
- * @param prefix The test ID prefix.
- */
-function exploreNode(node: ParsedNode, file: string, prefix: string): TestInfo | TestSuiteInfo | null {
-  switch (node.type) {
-    case ParsedNodeTypes.it:
-      const it = node as ItBlock;
-      return {
-        file,
-        id: path.join(file, prefix, it.name),
-        label: it.name,
-        line: it.start.line,
-        type: "test",
-      } as TestInfo;
-    case ParsedNodeTypes.describe:
-      const describe = node as DescribeBlock;
-      const id = path.join(file, prefix, describe.name);
-      const children = (describe.children || [])
-        .map((x) => exploreNode(x, file, id))
-        .filter(Boolean);
-      return {
-        children,
-        file,
-        id,
-        label: describe.name,
-        line: describe.start.line,
-        type: "suite",
-      } as TestSuiteInfo;
-    default:
-      return null;
+    return [];
   }
 }
 
@@ -174,37 +100,22 @@ function getDirectoryContents(directory: string): Promise<string[]> {
 }
 
 export default class TestLoader {
-
   constructor(
-    private readonly emitter: EventEmitter<TestLoadStartedEvent | TestLoadFinishedEvent>,
     private readonly log: Log,
     private readonly projectWorkspace: ProjectWorkspace,
   ) {
   }
 
   public async loadTests() {
-    this.emitter.fire({
-      type: "started",
-    } as TestLoadStartedEvent);
-
     this.log.info(`Loading Jest settings from ${this.projectWorkspace.pathToConfig}`);
     const settings = new Settings(this.projectWorkspace);
     this.log.info("Jest settings loaded");
 
     this.log.info("Loading Jest tests");
     const matcher = createMatcher(settings);
-    const testSuite = await exploreDirectory(this.projectWorkspace.rootPath, matcher);
+    const parsedResults = await exploreDirectory(this.projectWorkspace.rootPath, matcher);
     this.log.info("Test load complete");
 
-    this.emitter.fire({
-      suite: {
-        children: testSuite.children,
-        id: "root",
-        label: "Jest",
-        type: "suite",
-      },
-      type: "finished",
-    } as TestLoadFinishedEvent);
+    return parsedResults;
   }
-
 }
