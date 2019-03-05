@@ -10,13 +10,7 @@ import {
   TestSuiteEvent,
 } from "vscode-test-adapter-api";
 import { Log } from "vscode-test-adapter-util";
-import {
-  mapJestAssertionToTestDecorations,
-  mapJestAssertionToTestInfo,
-  mapJestFileResultToTestSuiteInfo,
-  mapJestParseToTestSuiteInfo,
-  mapTestIdsToTestFilter,
-} from "./helpers/mapJestToTestAdapter";
+import JestToTestAdapterMapper from "./helpers/JestToTestAdapterMapper";
 import JestManager, { IJestManagerOptions } from "./JestManager";
 import TestLoader from "./TestLoader";
 
@@ -54,6 +48,7 @@ export default class JestTestAdapter implements TestAdapter {
   >();
   private readonly autorunEmitter = new vscode.EventEmitter<void>();
   private readonly jestManager: JestManager;
+  private readonly jestMapper: JestToTestAdapterMapper;
 
   constructor(
     public readonly workspace: vscode.WorkspaceFolder,
@@ -63,6 +58,7 @@ export default class JestTestAdapter implements TestAdapter {
     this.log.info("Initializing Jest adapter");
 
     this.jestManager = new JestManager(workspace, options);
+    this.jestMapper = new JestToTestAdapterMapper(this.workspace.uri.fsPath);
 
     this.disposables.push(this.testsEmitter);
     this.disposables.push(this.testStatesEmitter);
@@ -82,10 +78,7 @@ export default class JestTestAdapter implements TestAdapter {
     } as TestLoadStartedEvent);
 
     const parsedResults = await testLoader.loadTests();
-    const suite = mapJestParseToTestSuiteInfo(
-      parsedResults,
-      this.workspace.uri.fsPath,
-    );
+    const suite = this.jestMapper.mapJestParseToTestSuiteInfo(parsedResults);
 
     this.testsEmitter.fire({
       suite,
@@ -101,39 +94,33 @@ export default class JestTestAdapter implements TestAdapter {
       type: "started",
     } as TestRunStartedEvent);
 
-    const testFilter = mapTestIdsToTestFilter(tests);
+    const testFilter = this.jestMapper.mapTestIdsToTestFilter(tests);
     const jestResponse = await this.jestManager.runTests(testFilter);
     if (jestResponse) {
       const { reconciler, results } = jestResponse;
       results.testResults.forEach((fileResult) => {
         this.testStatesEmitter.fire({
           state: "running",
-          suite: mapJestFileResultToTestSuiteInfo(
-            fileResult,
-            this.workspace.uri.fsPath,
-          ),
+          suite: this.jestMapper.mapJestFileResultToTestSuiteInfo(fileResult),
           type: "suite",
         } as TestSuiteEvent);
 
         fileResult.assertionResults.forEach((assertionResult) => {
           this.testStatesEmitter.fire({
-            decorations: mapJestAssertionToTestDecorations(
+            decorations: this.jestMapper.mapJestAssertionToTestDecorations(
               assertionResult,
               fileResult.name,
               reconciler,
             ),
             state: assertionResult.status,
-            test: mapJestAssertionToTestInfo(assertionResult, fileResult),
+            test: this.jestMapper.mapJestAssertionToTestInfo(assertionResult, fileResult),
             type: "test",
           } as TestEvent);
         });
 
         this.testStatesEmitter.fire({
           state: "completed",
-          suite: mapJestFileResultToTestSuiteInfo(
-            fileResult,
-            this.workspace.uri.fsPath,
-          ),
+          suite: this.jestMapper.mapJestFileResultToTestSuiteInfo(fileResult),
           type: "suite",
         } as TestSuiteEvent);
       });
@@ -151,7 +138,7 @@ export default class JestTestAdapter implements TestAdapter {
 
   public async debug(tests: string[]): Promise<void> {
     const args = ["--runInBand"];
-    const testFilter = mapTestIdsToTestFilter(tests);
+    const testFilter = this.jestMapper.mapTestIdsToTestFilter(tests);
     if (testFilter) {
       if (testFilter.testFileNamePattern) {
         args.push("--testPathPattern");
