@@ -26,7 +26,7 @@ export default class JestToTestAdapterMapper {
     reconciler?: TestReconciler,
   ): TestDecoration[] {
     const assertionResult = this.getAssertionStatus(result, file, reconciler);
-    if (assertionResult) {
+    if (assertionResult && assertionResult.status === "KnownFail") {
       return [
         {
           line: assertionResult.line || 0,
